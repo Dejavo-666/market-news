@@ -1,0 +1,38 @@
+name: market-news
+
+# Runs every hour on GitHub's servers (no computer needed).
+# The script itself detects 07:00 Amman (04:00 UTC) and sends the fuller
+# "morning report" at that hour; all other hours are normal updates.
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch: {}      # lets you press "Run workflow" manually to test
+
+permissions:
+  contents: write            # needed to save the updated page + memory back to the repo
+
+concurrency:
+  group: market-news
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install requests
+      - name: Run market-news monitor
+        env:
+          NEWSDATA_API_KEY: ${{ secrets.NEWSDATA_API_KEY }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: python fetch_and_publish.py
+      - name: Save updated page and memory
+        run: |
+          git config user.name "news-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add docs/index.html state.json
+          git diff --quiet --staged || git commit -m "news update $(date -u +%FT%TZ)"
+          git push
